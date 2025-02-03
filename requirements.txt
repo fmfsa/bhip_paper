@@ -1,0 +1,11 @@
+arviz==0.17.1
+causalicp==0.1.1
+jax==0.4.25
+matplotlib==3.10.0
+networkx==3.2.1
+numpy==2.2.2
+numpyro==0.15.1
+pandas==2.2.3
+seaborn==0.13.2
+torch==2.3.0.post101
+torch==2.5.0
