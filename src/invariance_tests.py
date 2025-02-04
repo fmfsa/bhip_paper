@@ -3,7 +3,6 @@ import arviz as az
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
-from matplotlib.patches import Ellipse
 
 
 def pooling_factor(sample_beta, sample_mu, E):
