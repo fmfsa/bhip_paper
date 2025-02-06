@@ -2,7 +2,6 @@ import numpy as np
 import arviz as az
 import matplotlib.pyplot as plt
 import seaborn as sns
-import pandas as pd
 
 
 def pooling_factor(sample_beta, sample_mu, E):
@@ -53,14 +52,16 @@ def plot_hdi_rope(sample, hdi_low, hdi_upper, rope_low, rope_upper, var_name):
     Plots the HDI vs ROPE for the given sample.
     """
     sns.histplot(sample, kde=True, bins=30, color="blue", label="Posterior Samples")
-    plt.axvline(hdi_low, color="red", linestyle="--", label="HDI Lower Bound")
-    plt.axvline(hdi_upper, color="red", linestyle="--", label="HDI Upper Bound")
-    plt.axvline(rope_low, color="green", linestyle="--", label="ROPE Lower Bound")
-    plt.axvline(rope_upper, color="green", linestyle="--", label="ROPE Upper Bound")
-    plt.title(f"HDI + ROPE for {var_name}")
-    plt.xlabel("Value")
-    plt.ylabel("Density")
+    plt.axvline(hdi_low, color="red", linestyle="--")
+    plt.axvline(hdi_upper, color="red", linestyle="--", label="HDI Bounds")
+    plt.axvline(rope_low, color="green", linestyle="--")
+    plt.axvline(rope_upper, color="green", linestyle="--", label="ROPE Bounds")
+    #plt.title(f"HDI + ROPE for {var_name}")
+    plt.xlabel("Value", fontsize=14)
+    plt.ylabel("Density", fontsize=14)
     plt.legend()
+    ax = plt.gca()  # Get the current axes
+    ax.tick_params(axis="both", which="major", labelsize=12)
     plt.show()
 
 def plot_combined_beta(beta_samples, sd_beta, D, E, X_cols):
@@ -71,20 +72,28 @@ def plot_combined_beta(beta_samples, sd_beta, D, E, X_cols):
         predictor_name = X_cols[d] if d < len(X_cols) else f"Predictor_{d}"
         plt.figure(figsize=(10, 6))
 
+        # Define a list of different line styles
+        line_styles = ['--', '-.', ':', '-', '--', '-.', ':', '-']
+
         for e in range(E):
             hdi_low, hdi_upper = compute_hdi(beta_samples[:, e, d], 0.95)
             rope_low, rope_upper = -sd_beta[d, e], sd_beta[d, e]
 
-            sns.histplot(beta_samples[:, e, d], kde=True, bins=30, label=f"Env {e}")
-            plt.axvline(hdi_low, color="red", linestyle="--", label=f"HDI Lower (Env {e})")
-            plt.axvline(hdi_upper, color="red", linestyle="--", label=f"HDI Upper (Env {e})")
-            plt.axvline(rope_low, color="green", linestyle="--", label=f"ROPE Lower (Env {e})")
-            plt.axvline(rope_upper, color="green", linestyle="--", label=f"ROPE Upper (Env {e})")
+            # Get the line style for this environment
+            line_style = line_styles[e % len(line_styles)]
 
-        plt.title(f"Combined HDI + ROPE for Beta: {predictor_name}")
-        plt.xlabel("Value")
-        plt.ylabel("Density")
+            sns.histplot(beta_samples[:, e, d], kde=True, bins=30, label=f"Env {e}")
+            plt.axvline(hdi_low, color="red", linestyle=line_style)
+            plt.axvline(hdi_upper, color="red", linestyle=line_style, label=f"HDI Bounds (Env {e})")
+            plt.axvline(rope_low, color="green", linestyle=line_style)
+            plt.axvline(rope_upper, color="green", linestyle=line_style, label=f"ROPE Bounds (Env {e})")
+
+        #plt.title(f"Combined HDI + ROPE for Beta: {predictor_name}")
+        plt.xlabel("Value", fontsize=14)
+        plt.ylabel("Density", fontsize=14)
         plt.legend()
+        ax = plt.gca()  # Get the current axes
+        ax.tick_params(axis="both", which="major", labelsize=12)
         plt.show()
 
 def hdi_rope_test(sample, margin, relaxation, plot= False, var_name=""):
@@ -156,6 +165,7 @@ def invariance_tests(mcmc_samples, D, E, X_cols, alpha_beta=0.05, local_rope="tw
 
         if printing:
             print(f'--------- Predictor {d} ---------')
+            print(f'--------- Predictor {predictor_name} ---------')
 
         # Local ROPE test for each environment
         if local_rope == "two_sd":
@@ -221,282 +231,3 @@ def invariance_tests(mcmc_samples, D, E, X_cols, alpha_beta=0.05, local_rope="tw
         plot_combined_beta(beta_samples, sd_beta, D, E, X_cols)
 
     return mu_pass, beta_pass, pool_pass
-
-def invariance_tests_with_dynamic_rope(
-    mcmc_samples, D, E, rope_type="sd", pooling_type="normal",
-    printing=True, plotting=False, X_cols=None
-):
-    """
-    Perform invariance tests using HDI, ROPE, and probability mass outside ROPE with flexible margin specification.
-
-    Args:
-        mcmc_samples: Dictionary of posterior samples, containing 'beta' and 'mu'.
-        D: Number of predictors.
-        E: Number of environments.
-        rope_type: Type of ROPE margin ('sd', 'two_sd', 'tenth_sd', or a fixed value).
-        pooling_type: 'normal' for `pooling_factor`, 'beta_pooling' for `beta_pooling_factor`.
-        printing: Whether to print detailed outputs.
-        plotting: Whether to generate the heatmap.
-        X_cols: List of predictor names to use in the output DataFrame and plot.
-
-    Returns:
-        df: DataFrame containing invariance metrics for each predictor.
-    """
-    beta_samples = np.asarray(mcmc_samples['beta'])
-    mu_samples = np.asarray(mcmc_samples['mu'])
-
-    if X_cols is None or len(X_cols) != D:
-        X_cols = [f"Predictor_{d}" for d in range(D)]
-
-    results = []
-
-    for d in range(D):
-        if printing:
-            print(f'--------- Predictor {X_cols[d]} ---------')
-
-        # Determine ROPE margin for beta (local)
-        if rope_type in ["sd", "two_sd", "tenth_sd"]:
-            beta_sd = np.std(beta_samples[:, :, d], axis=0)
-            if rope_type == "sd":
-                dynamic_rope_margins = beta_sd
-            elif rope_type == "two_sd":
-                dynamic_rope_margins = 2 * beta_sd
-            elif rope_type == "tenth_sd":
-                dynamic_rope_margins = 0.1 * beta_sd
-        else:
-            dynamic_rope_margins = np.full(E, rope_type)
-
-        local_outcomes = []
-        for e in range(E):
-            rope_margin = dynamic_rope_margins[e]
-            largest_out, left_out, right_out = prob_mass_outside_rope(
-                beta_samples[:, e, d], -rope_margin, rope_margin
-            )
-            local_outcomes.append(largest_out)
-
-            if printing:
-                print(f"Env {e}: Largest Out: {largest_out:.4f}, Left: {left_out:.4f}, Right: {right_out:.4f}")
-
-        min_local_outcome = min(local_outcomes)
-
-        # Global outcome for mu
-        mu_sd = np.std(mu_samples[:, d])
-        if rope_type == "sd":
-            global_rope_margin = mu_sd
-        elif rope_type == "two_sd":
-            global_rope_margin = 2 * mu_sd
-        elif rope_type == "tenth_sd":
-            global_rope_margin = 0.1 * mu_sd
-        else:
-            global_rope_margin = rope_type
-
-        global_out, left_out, right_out = prob_mass_outside_rope(
-            mu_samples[:, d], -global_rope_margin, global_rope_margin
-        )
-        if printing:
-            print(f"Global Mu: Largest Out: {global_out:.4f}, Left: {left_out:.4f}, Right: {right_out:.4f}")
-
-        # Compute the requested pooling factor
-        if pooling_type == "normal":
-            pooling = pooling_factor(beta_samples[:, :, d], mu_samples[:, d], E)
-        elif pooling_type == "beta_pooling":
-            pooling = beta_pooling_factor(beta_samples[:, :, d], E)
-        else:
-            raise ValueError("Invalid pooling_type. Use 'normal' or 'beta_pooling'.")
-
-        if printing:
-            print(f"Pooling Factor ({pooling_type}): {pooling:.4f}")
-
-        results.append({
-            "Predictor": X_cols[d],
-            "Min Local Outcome": min_local_outcome,
-            "Global Outcome": global_out,
-            "Pooling Factor": pooling,
-        })
-
-    df = pd.DataFrame(results)
-
-    if plotting:
-        plot_invariance_heatmap(df)
-        plot_2d_invariance_map(df)
-        plot_2d_invariance_map_lines(df)
-
-    return df
-
-def bootstrap_data(X, y, e, n_bootstrap):
-    """
-    Generate bootstrap samples for the data.
-
-    Parameters:
-    - X: Covariate matrix (shape: [N, D])
-    - y: Target vector (shape: [N])
-    - e: Environment indices (shape: [N])
-    - n_bootstrap: Number of bootstrap samples
-
-    Returns:
-    - List of bootstrap samples [(X_boot, y_boot, e_boot)]
-    """
-    N = X.shape[0]
-    bootstraps = []
-    for _ in range(n_bootstrap):
-        indices = np.random.choice(N, size=N, replace=True)
-        bootstraps.append((X[indices], y[indices], e[indices]))
-    return bootstraps
-
-
-def order_predictors_by_invariance(df, weights=(1/3, 1/3, 1/3)):
-    """
-    Orders predictors based on a composite metric for causal invariance.
-
-    Parameters:
-    - df: DataFrame containing invariance metrics.
-    - weights: Tuple of weights for (Min Local Outcome, Global Outcome, Pooling Factor).
-
-    Returns:
-    - df_sorted: DataFrame sorted by the composite metric in descending order.
-    """
-    w1, w2, w3 = weights
-
-    df['Composite Metric'] = (
-        w1 * df['Min Local Outcome'] +
-        w2 * df['Global Outcome'] +
-        w3 * df['Pooling Factor']
-    )
-
-    df_sorted = df.sort_values(by='Composite Metric', ascending=False).reset_index(drop=True)
-
-    return df_sorted.drop(columns=["Composite Metric"])
-
-
-def plot_invariance_heatmap(df):
-    """
-    Plots a heatmap from the invariance test results DataFrame without normalization.
-
-    Parameters:
-    - df: DataFrame with invariance metrics (Predictor as a column).
-    """
-    df_sorted = order_predictors_by_invariance(df)
-    df_plot = df_sorted.set_index("Predictor")
-
-    plt.figure(figsize=(10, 6))
-    sns.heatmap(df_plot, annot=True, cmap="coolwarm", cbar_kws={"label": "Raw Metric Value"}, vmin=0, vmax=1)
-    plt.title("Confidence in Predictor Invariance")
-    plt.ylabel("Predictors")
-    plt.xlabel("Metrics")
-    plt.show()
-
-
-def plot_2d_invariance_map(df):
-    """
-    Plots a 2D map of predictors based on local and global confidence with pooling factor as color.
-
-    Parameters:
-    - df: DataFrame containing 'Min Local Outcome', 'Global Outcome', and 'Pooling Factor'.
-    """
-    plt.figure(figsize=(10, 8))
-
-    scatter = plt.scatter(
-        df['Min Local Outcome'],
-        df['Global Outcome'],
-        c=df['Pooling Factor'],
-        cmap="viridis",
-        s=100,
-        edgecolor="black",
-        vmin=0,  # Pooling factor lower bound
-        vmax=1   # Pooling factor upper bound
-    )
-
-    for i, row in df.iterrows():
-        plt.text(
-            row['Min Local Outcome'], row['Global Outcome'],
-            row['Predictor'], fontsize=9, ha='right'
-        )
-
-    cbar = plt.colorbar(scatter)
-    cbar.set_label("Pooling Factor", fontsize=12)
-
-    plt.title("Predictor Invariance Map", fontsize=16)
-    plt.xlabel("Min Local Outcome (Local Confidence)", fontsize=12)
-    plt.ylabel("Global Outcome (Global Confidence)", fontsize=12)
-
-    plt.xlim(0, 1.1)  # Enforce x-axis limits
-    plt.ylim(0, 1.1)  # Enforce y-axis limits
-    plt.grid(True, linestyle="--", alpha=0.7)
-    plt.show()
-
-def plot_2d_invariance_map_lines(df):
-    """
-    Plots a 2D map of predictors with pooling factor on the y-axis and a line from
-    Min Local Outcome to Global Outcome on the x-axis.
-
-    Parameters:
-    - df: DataFrame containing 'Min Local Outcome', 'Global Outcome', and 'Pooling Factor'.
-    """
-    plt.figure(figsize=(10, 8))
-
-    for i, row in df.iterrows():
-        # Draw a horizontal line for each predictor
-        plt.plot(
-            [row['Min Local Outcome'], row['Global Outcome']],
-            [row['Pooling Factor'], row['Pooling Factor']],
-            label=row['Predictor'], marker='o', linestyle='-', markersize=8
-        )
-        # Annotate the predictor name at the midpoint of the line
-        # midpoint_x = (row['Min Local Outcome'] + row['Global Outcome']) / 2
-        # plt.text(
-        #     midpoint_x, row['Pooling Factor'],
-        #     row['Predictor'], fontsize=9, ha='center', va='bottom'
-        # )
-
-    plt.title("Predictor Invariance Map", fontsize=16)
-    plt.xlabel("Confidence of Effect (Local to Global)", fontsize=12)
-    plt.ylabel("Pooling Factor", fontsize=12)
-
-    #plt.xlim(0, 1.1)  # Enforce x-axis limits
-    #plt.ylim(0, 1.1)  # Enforce y-axis limits
-    plt.grid(True, linestyle="--", alpha=0.7)
-    plt.legend(loc="upper left", fontsize=9, frameon=False)
-    plt.show()
-
-def plot_predictor_heatmaps(bootstrap_results, X_cols, outcome="global"):
-    """
-    Generate unified heatmaps for each predictor, either local and global outcome densities.
-    """
-    n_predictors = len(X_cols)
-    n_cols = 3
-    n_rows = (n_predictors + n_cols - 1) // n_cols
-
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(16, n_rows * 4), constrained_layout=True)
-    axes = axes.flatten()
-
-    for idx, predictor in enumerate(X_cols):
-        local_values, global_values, pooling_values = [], [], []
-        for df in bootstrap_results:
-            row = df.loc[df['Predictor'] == predictor]
-            if not row.empty:
-                local_values.append(row['Min Local Outcome'].values[0])
-                global_values.append(row['Global Outcome'].values[0])
-                pooling_values.append(row['Pooling Factor'].values[0])
-
-        outcomes = local_values if outcome == "local" else global_values
-        combined_pooling =  pooling_values
-
-        sns.kdeplot(
-            x=outcomes,
-            y=combined_pooling,
-            ax=axes[idx],
-            fill=True,
-            levels=100,
-            cmap="viridis",
-            thresh=0,
-            clip=((0, 1), (0, 1))
-        )
-        axes[idx].set_title(f"{predictor}", fontsize=14)
-        axes[idx].set_xlabel("Outcome (Local + Global)")
-        axes[idx].set_ylabel("Pooling Factor")
-
-    for ax in axes[n_predictors:]:
-        ax.axis('off')
-
-    plt.suptitle("Unified Heatmaps of Predictor Metrics", fontsize=18, y=1.02)
-    plt.show()

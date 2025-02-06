@@ -151,57 +151,6 @@ def horseshoe_hierarchical_model(N, D, E, e, X, y):
         sample("obs", dist.Normal(mean, sigma_obs), obs=y)
 
 
-def heteroskedastic_hierarchical_model(N, D, E, e, X, y):
-    """
-    Hierarchical heteroskedastic Bayesian model.
-
-    Parameters:
-    - N: Number of observations
-    - D: Number of covariates
-    - E: Number of environments
-    - e: Array of environment indices for each observation (shape: [N])
-    - X: Covariate matrix (shape: [N, D])
-    - y: Target vector (shape: [N])
-    """
-    # Priors for mu and tau
-    mu = sample("mu", dist.Normal(jnp.zeros(D), jnp.ones(D)))
-    tau = sample("tau", dist.HalfCauchy(jnp.ones(D)))
-    sigma = sample("sigma", dist.HalfCauchy(1.0))
-
-    # Sample beta for each environment
-    with plate("E_plate", E):
-        beta = sample("beta", dist.Normal(mu, tau).to_event(1))
-
-    # Compute the mean for each observation
-    mean = jnp.sum(X * beta[e, :], axis=1)
-    sample("obs", dist.Normal(mean, sigma), obs=y)
-
-def heteroskedastic_logistic_hierarchical_model(N, D, E, e, X, y):
-    """
-    Hierarchical heteroskedastic Bayesian logistics model.
-
-    Parameters:
-    - N: Number of observations
-    - D: Number of covariates
-    - E: Number of environments
-    - e: Array of environment indices for each observation (shape: [N])
-    - X: Covariate matrix (shape: [N, D])
-    - y: Target vector (shape: [N])
-    """
-    mu = sample("mu", dist.Normal(jnp.zeros(D), jnp.ones(D)))
-    tau = sample("tau", dist.HalfCauchy(jnp.ones(D)))
-
-    log_sigma = sample("log_sigma", dist.Normal(0.0, 1.0))
-    sigma = jnp.exp(log_sigma)
-
-    with plate("E_plate", E):
-        beta = sample("beta", dist.Normal(mu, tau).to_event(1))
-
-    linear_pred = jnp.sum(X * beta[e, :], axis=1)
-    scaled_logits = linear_pred / sigma
-
-    sample("obs", dist.Bernoulli(logits=scaled_logits), obs=y)
-
 def nc_hierarchical_model_general(N, D, E, e, X, y, model_func=hierarchical_model, centered=0.0):
     """
     Generalized hierarchical model with non-centered parameterization.
