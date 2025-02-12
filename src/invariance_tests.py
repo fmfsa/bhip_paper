@@ -3,6 +3,20 @@ import arviz as az
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+plt.rcParams.update({
+    "text.usetex": True,  # Use LaTeX for text rendering
+    "font.family": "serif",  # Use a serif font
+    "font.size": 14,  # Set global font size
+    "axes.labelsize": 16,  # Font size for axis labels
+    "axes.titlesize": 18,  # Font size for titles
+    "xtick.labelsize": 12,  # Font size for x-axis tick labels
+    "ytick.labelsize": 12,  # Font size for y-axis tick labels
+    "legend.fontsize": 14,  # Font size for legends
+    "figure.figsize": (8, 6),  # Default figure size
+    "figure.dpi": 100,  # DPI for figures
+})
+sns.set_style("darkgrid")
+
 
 def pooling_factor(sample_beta, sample_mu, E):
     """
@@ -47,54 +61,50 @@ def compute_hdi(sample, prob):
     hdi_bounds = az.hdi(sample, hdi_prob=prob)
     return hdi_bounds[0], hdi_bounds[1]
 
+
 def plot_hdi_rope(sample, hdi_low, hdi_upper, rope_low, rope_upper, var_name):
     """
-    Plots the HDI vs ROPE for the given sample.
+    Plots the HDI vs ROPE for the given sample with LaTeX formatting.
     """
     sns.histplot(sample, kde=True, bins=30, color="blue", label="Posterior Samples")
-    plt.axvline(hdi_low, color="red", linestyle="--")
-    plt.axvline(hdi_upper, color="red", linestyle="--", label="HDI Bounds")
-    plt.axvline(rope_low, color="green", linestyle="--")
-    plt.axvline(rope_upper, color="green", linestyle="--", label="ROPE Bounds")
-    #plt.title(f"HDI + ROPE for {var_name}")
-    plt.xlabel("Value", fontsize=14)
-    plt.ylabel("Density", fontsize=14)
+
+    plt.axvline(hdi_low, color="red", linestyle="--", label=r"HDI Lower Bound")
+    plt.axvline(hdi_upper, color="red", linestyle="--", label=r"HDI Upper Bound")
+    plt.axvline(rope_low, color="green", linestyle="--", label=r"ROPE Lower Bound")
+    plt.axvline(rope_upper, color="green", linestyle="--", label=r"ROPE Upper Bound")
+
+    plt.xlabel(r"Value")
+    plt.ylabel(r"Density")
     plt.legend()
-    ax = plt.gca()  # Get the current axes
-    ax.tick_params(axis="both", which="major", labelsize=12)
+
     plt.show()
+
 
 def plot_combined_beta(beta_samples, sd_beta, D, E, X_cols):
     """
-    Plots the combined HDI + ROPE for all beta predictors across environments.
+    Plots the combined HDI + ROPE for all beta predictors across environments with LaTeX formatting.
     """
     for d in range(D):
-        predictor_name = X_cols[d] if d < len(X_cols) else f"Predictor_{d}"
-        plt.figure(figsize=(10, 6))
+        predictor_name = X_cols[d] if d < len(X_cols) else f"Predictor {d}"
+        plt.figure(figsize=(8, 6))
 
-        # Define a list of different line styles
         line_styles = ['--', '-.', ':', '-', '--', '-.', ':', '-']
 
         for e in range(E):
             hdi_low, hdi_upper = compute_hdi(beta_samples[:, e, d], 0.95)
             rope_low, rope_upper = -sd_beta[d, e], sd_beta[d, e]
 
-            # Get the line style for this environment
-            line_style = line_styles[e % len(line_styles)]
+            sns.histplot(beta_samples[:, e, d], kde=True, bins=30, label=rf"{{Env {e}}}")
+            plt.axvline(hdi_low, color="red", linestyle=line_styles[e % len(line_styles)], label=rf"{{HDI (Env {e})}}")
+            plt.axvline(hdi_upper, color="red", linestyle=line_styles[e % len(line_styles)])
+            plt.axvline(rope_low, color="green", linestyle=line_styles[e % len(line_styles)], label=rf"{{ROPE (Env {e})}}")
+            plt.axvline(rope_upper, color="green", linestyle=line_styles[e % len(line_styles)])
 
-            sns.histplot(beta_samples[:, e, d], kde=True, bins=30, label=f"Env {e}")
-            plt.axvline(hdi_low, color="red", linestyle=line_style)
-            plt.axvline(hdi_upper, color="red", linestyle=line_style, label=f"HDI Bounds (Env {e})")
-            plt.axvline(rope_low, color="green", linestyle=line_style)
-            plt.axvline(rope_upper, color="green", linestyle=line_style, label=f"ROPE Bounds (Env {e})")
-
-        #plt.title(f"Combined HDI + ROPE for Beta: {predictor_name}")
-        plt.xlabel("Value", fontsize=14)
-        plt.ylabel("Density", fontsize=14)
+        plt.xlabel(r"Value")
+        plt.ylabel(r"Density")
         plt.legend()
-        ax = plt.gca()  # Get the current axes
-        ax.tick_params(axis="both", which="major", labelsize=12)
         plt.show()
+
 
 def hdi_rope_test(sample, margin, relaxation, plot= False, var_name=""):
     """
