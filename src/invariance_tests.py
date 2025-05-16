@@ -205,7 +205,7 @@ def invariance_tests(mcmc_samples, D, E, X_cols, alpha_beta=0.05, local_rope="tw
         elif global_rope == "sd":
             margin_mu = sd_mu[d]
         elif global_rope == "tenth_sd":
-            margin_mu = sd_mu[d]
+            margin_mu = np.mean([0.1 * sd_beta[d, e] for e in range(E)])
         else:
             margin_mu = global_rope
         zero_test_mu = hdi_rope_test(mu_samples[:, d], margin_mu, alpha_mu,
